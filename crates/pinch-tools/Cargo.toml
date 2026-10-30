@@ -1,0 +1,18 @@
+[package]
+name = "pinch-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+pinch-core.workspace = true
+pinch-diff.workspace = true
+pinch-llm.workspace = true
+pinch-providers.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true

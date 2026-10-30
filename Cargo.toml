@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pinch-core",
+    "crates/pinch-diff",
+    "crates/pinch-providers",
+    "crates/pinch-llm",
+    "crates/pinch-tools",
+    "crates/pinch-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["PinchPR Contributors"]
+repository = "https://github.com/pinchpr/pinchpr"
+
+[workspace.dependencies]
+# Internal workspace crates
+pinch-core = { path = "crates/pinch-core" }
+pinch-diff = { path = "crates/pinch-diff" }
+pinch-providers = { path = "crates/pinch-providers" }
+pinch-llm = { path = "crates/pinch-llm" }
+pinch-tools = { path = "crates/pinch-tools" }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling and logging
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI and configuration
+clap = { version = "4.5", features = ["derive", "env"] }
+config = "0.15"
+
+# External services
+octocrab = { version = "0.54" }
+async-openai = { version = "0.42", features = ["chat-completion", "rustls"] }
+tiktoken-rs = "0.12"
+regex = "1.10"
