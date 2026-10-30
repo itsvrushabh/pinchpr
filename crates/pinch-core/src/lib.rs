@@ -6,7 +6,8 @@ pub mod traits;
 pub use config::Settings;
 pub use error::{ConfigError, DiffError, LlmError, ProviderError};
 pub use models::{
-    CommentSide, DiffFile, DiffHunk, DiffLine, DiffLineKind, FileStatus, InlineComment,
-    IssueSeverity, PullRequest, ReviewIssue, ReviewResult,
+    AskResult, CodeSuggestion, CommentSide, DescribeResult, DiffFile, DiffHunk, DiffLine,
+    DiffLineKind, FileStatus, ImproveResult, InlineComment, IssueSeverity, PullRequest,
+    ReviewIssue, ReviewResult,
 };
 pub use traits::{GitProvider, LlmClient};

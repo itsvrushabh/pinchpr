@@ -1,0 +1,73 @@
+name: 'PinchPR Review Action'
+description: 'High-performance AI Pull Request reviews and code suggestions powered by Rust'
+author: 'itsvrushabh'
+branding:
+  icon: 'check-circle'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'GitHub token with pull-request read/write permissions'
+    required: false
+    default: ${{ github.token }}
+  openai-api-key:
+    description: 'API key for OpenAI or compatible provider'
+    required: false
+  command:
+    description: 'PinchPR command to execute: review, improve, or describe'
+    required: false
+    default: 'review'
+  model:
+    description: 'Model name (e.g. gpt-4o-mini, gpt-4o, llama3)'
+    required: false
+    default: 'gpt-4o-mini'
+  base-url:
+    description: 'Custom base URL for local LLM or proxy (Ollama, vLLM, Groq)'
+    required: false
+  dry-run:
+    description: 'Run analysis without mutating GitHub PR comments'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      shell: bash
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      shell: bash
+
+    - name: Build pinch-pr
+      run: cargo build --release --bin pinch-pr
+      shell: bash
+
+    - name: Run PinchPR
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        if [ -z "$PR_NUMBER" ]; then
+          echo "Error: This action must run in the context of a pull_request event."
+          exit 1
+        fi
+
+        ARGS=("--pr" "$PR_NUMBER")
+
+        if [ -n "${{ inputs.model }}" ]; then
+          ARGS+=("--model" "${{ inputs.model }}")
+        fi
+
+        if [ -n "${{ inputs.base-url }}" ]; then
+          ARGS+=("--base-url" "${{ inputs.base-url }}")
+        fi
+
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          ARGS+=("--dry-run")
+        fi
+
+        ./target/release/pinch-pr ${{ inputs.command }} "${ARGS[@]}"

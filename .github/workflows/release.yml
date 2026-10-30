@@ -1,139 +1,64 @@
-name: Draft release
+name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  validate:
-    name: Validate release tag and source
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.version.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Validate semantic version tag
-        id: version
-        shell: bash
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Expected a stable vX.Y.Z tag, got: $tag" >&2
-            exit 1
-          fi
-          version="${tag#v}"
-          cargo metadata --no-deps --format-version 1 > metadata.json
-          python3 - "$version" metadata.json <<'PY'
-          import json
-          import sys
-
-          expected, metadata_path = sys.argv[1:]
-          with open(metadata_path, encoding="utf-8") as metadata_file:
-              metadata = json.load(metadata_file)
-          members = set(metadata["workspace_members"])
-          packages = [package for package in metadata["packages"] if package["id"] in members]
-          mismatched = [package["name"] for package in packages if package["version"] != expected]
-          if mismatched:
-              raise SystemExit(
-                  f"Tag version {expected} does not match workspace package versions: "
-                  + ", ".join(mismatched)
-              )
-          PY
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-  test:
-    name: Test release source
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --locked
-
-  build:
-    name: Build ${{ matrix.target }}
-    needs: [validate, test]
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            archive: tar.gz
+            artifact_name: pinch-pr-linux-x86_64.tar.gz
+            binary: target/x86_64-unknown-linux-gnu/release/pinch-pr
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: tar.gz
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive: zip
-    runs-on: ${{ matrix.os }}
+            artifact_name: pinch-pr-macos-arm64.tar.gz
+            binary: target/aarch64-apple-darwin/release/pinch-pr
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-      - name: Build CLI
-        run: cargo build --release --locked --package pinch-cli --target ${{ matrix.target }}
-      - name: Package Linux and macOS binaries
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          mkdir -p dist
-          mkdir -p package
-          archive="pinch-pr-${GITHUB_REF_NAME}-${{ matrix.target }}.tar.gz"
-          cp "target/${{ matrix.target }}/release/pinch-pr" package/
-          printf 'Run ./pinch-pr --help for usage. Configure an LLM API key before reviewing.\n' > package/README.txt
-          tar -czf "dist/$archive" -C package .
-          cd dist
-          shasum -a 256 "$archive" > "$archive.sha256"
-      - name: Package Windows binary
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          New-Item -ItemType Directory -Force package | Out-Null
-          $archive = "pinch-pr-${{ needs.validate.outputs.tag }}-${{ matrix.target }}.zip"
-          Copy-Item "target/${{ matrix.target }}/release/pinch-pr.exe" package/
-          "Run pinch-pr.exe --help for usage. Configure an LLM API key before reviewing." | Set-Content package/README.txt
-          Compress-Archive -Path package/* -DestinationPath "dist/$archive"
-          $hash = (Get-FileHash "dist/$archive" -Algorithm SHA256).Hash.ToLower()
-          "$hash  $archive" | Set-Content "dist/$archive.sha256" -Encoding ascii
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pinch-pr-${{ matrix.target }}
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 7
 
-  publish-draft:
-    name: Create draft GitHub Release
-    needs: [validate, test, build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Create draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.validate.outputs.tag }}
+      - name: Build Binary
+        run: cargo build --release --bin pinch-pr --target ${{ matrix.target }}
+
+      - name: Package Release
         run: |
-          if gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
-            gh release upload "$TAG" dist/* --clobber
-          else
-            gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes dist/*
-          fi
+          tar -czf ${{ matrix.artifact_name }} -C $(dirname ${{ matrix.binary }}) pinch-pr
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+
+  publish-release:
+    name: Create GitHub Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*
+          generate_release_notes: true

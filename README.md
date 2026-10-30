@@ -2,36 +2,49 @@
 
 > High-performance, asynchronous Rust rewrite of [The-PR-Agent/pr-agent](https://github.com/The-PR-Agent/pr-agent).
 
-PinchPR automates pull request reviews using Large Language Models with a focus on speed, correctness, zero-cost abstractions, and strict GitHub API resilience.
+PinchPR automates pull request reviews, 1-click code improvements, PR descriptions, and interactive Q&A using Large Language Models with a focus on speed, correctness, zero-cost abstractions, and strict GitHub API resilience.
+
+---
+
+## Capabilities
+
+* **🔍 `/review`:** Automated code review covering correctness, potential bugs, security vulnerabilities, performance regressions, and quality scores with diff-validated inline comments.
+* **💡 `/improve`:** Generates actionable code suggestions formatted with GitHub's native ```` ```suggestion ```` markdown syntax for **1-click commit application**.
+* **📝 `/describe`:** Scans PR changes to auto-generate pull request titles, type-of-change badges, overviews, and bulleted walkthroughs.
+* **❓ `/ask`:** Interactive technical Q&A answering targeted questions directly about the PR diff and architectural choices.
+* **🪄 Auto-Repo Detection:** Run inside any cloned git repository without specifying `--repo`; PinchPR automatically resolves `owner/repo` from your git origin remote.
+* **🦙 Local & Offline LLMs:** Fully compatible with local providers via Ollama, vLLM, and Groq through custom base URLs without OpenAI fees.
 
 ---
 
 ## Workspace Architecture
 
-The project is structured as a modular Cargo workspace:
+PinchPR is built as a clean, acyclic Cargo workspace:
 
-* [`crates/pinch-core`](crates/pinch-core): Shared domain data structures (`PullRequest`, `DiffFile`, `ReviewResult`), typed error definitions via `thiserror`, async traits (`GitProvider`, `LlmClient`), and hierarchical configuration loader.
+* [`crates/pinch-core`](crates/pinch-core): Domain data structures (`PullRequest`, `DiffFile`, `ReviewResult`, `CodeSuggestion`), typed error definitions via `thiserror`, async traits (`GitProvider`, `LlmClient`), and hierarchical configuration loader.
 * [`crates/pinch-diff`](crates/pinch-diff): Robust Git unified diff parser (with hunk and line indexing), file ignore filters, and dynamic BPE token budgeting via `tiktoken-rs`.
-* [`crates/pinch-llm`](crates/pinch-llm): Async LLM orchestration powered by `async-openai`, with support for custom base URLs (Ollama, vLLM, Groq, DeepSeek) and JSON fence extraction fallbacks.
+* [`crates/pinch-llm`](crates/pinch-llm): Async LLM orchestration powered by `async-openai`, supporting custom base URLs (Ollama, vLLM, Groq, DeepSeek) and JSON fence extraction fallbacks.
 * [`crates/pinch-providers`](crates/pinch-providers): Git hosting provider implementations (`GitHubProvider` via `octocrab`), with commit SHA validation, inline diff position checks, and graceful degradation from GitHub 422 errors.
-* [`crates/pinch-tools`](crates/pinch-tools): Orchestration pipeline for `/review` workflows, prompt formatting, and structured review generation.
+* [`crates/pinch-tools`](crates/pinch-tools): Pipelines for `/review`, `/improve`, `/describe`, and `/ask` workflows with embedded prompt templates.
 * [`crates/pinch-cli`](crates/pinch-cli): User-facing binary CLI (`pinch-pr`).
 
-For full architectural details, see [docs/plan.md](docs/plan.md).
-For branch naming, pull requests, and local development checks, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For in-depth architectural details, see [docs/plan.md](docs/plan.md).
 
 ---
 
 ## Installation & Build
 
-Ensure you have Rust 2021 edition installed (via [rustup](https://rustup.rs/)):
+Ensure you have Rust (2021 edition) installed:
 
 ```bash
-# Build the entire workspace
-cargo build
+# Build binary
+cargo build --release
 
-# Run all unit tests
-cargo test
+# Run unit tests across workspace
+cargo test --workspace
+
+# Lint with Clippy
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ---
@@ -52,60 +65,86 @@ export OPENAI_BASE_URL="http://localhost:11434/v1"
 
 ## CLI Usage
 
-### 1. Dry-run Review (Recommended for testing)
+When run inside a cloned Git repository, `--repo` is **automatically detected**. You can also pass `--repo owner/repo` explicitly.
 
-Run a complete pull request analysis without modifying GitHub:
+### 1. Review a Pull Request
 
 ```bash
-cargo run --bin pinch-pr -- review \
-  --repo tokio-rs/tokio \
-  --pr 6500 \
-  --dry-run
+# Local dry-run review (prints output without posting to GitHub)
+pinch-pr review --pr 42 --dry-run
+
+# Publish live review and inline comments to GitHub
+pinch-pr review --pr 42
 ```
 
-### 2. Live PR Review with Inline Comments
+### 2. Generate 1-Click Code Improvements (`/improve`)
 
-Publish a full structured review and inline comments directly to the pull request:
+Generates replacement blocks that can be committed directly from the GitHub PR view:
 
 ```bash
-cargo run --bin pinch-pr -- review \
-  --repo my-org/my-repo \
-  --pr 42
+pinch-pr improve --pr 42 --dry-run
 ```
 
-### 3. Override LLM Model & Base URL
+### 3. Generate PR Description (`/describe`)
 
 ```bash
-cargo run --bin pinch-pr -- review \
-  --repo my-org/my-repo \
+pinch-pr describe --pr 42 --dry-run
+```
+
+### 4. Interactive Q&A (`/ask`)
+
+```bash
+pinch-pr ask "Why was Mutex replaced with an RwLock in this PR?" --pr 42 --dry-run
+```
+
+---
+
+## Using with Local LLMs (Ollama / vLLM)
+
+Run reviews 100% offline and free using Ollama:
+
+```bash
+# 1. Start Ollama with a coding model
+ollama run qwen2.5-coder:7b
+
+# 2. Run PinchPR pointing to Ollama
+pinch-pr review \
   --pr 42 \
-  --model llama3.3:70b \
   --base-url http://localhost:11434/v1 \
+  --model qwen2.5-coder:7b \
   --dry-run
 ```
 
-### 4. Output Raw JSON
+---
 
-```bash
-cargo run --bin pinch-pr -- review \
-  --repo my-org/my-repo \
-  --pr 42 \
-  --format json \
-  --dry-run
+## GitHub Actions CI Integration
+
+You can integrate PinchPR directly into your repository workflows using `action.yml`:
+
+```yaml
+name: PinchPR Automated Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PinchPR Review
+        uses: itsvrushabh/pinchpr@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          command: review
 ```
-
-### 5. Review a Local Branch
-
-Review committed changes on the checked-out branch relative to a base branch or commit. This command prints a report and does not publish to GitHub or modify the repository:
-
-```bash
-cargo run --bin pinch-pr -- review-local \
-  --repo-path . \
-  --base main \
-  --format markdown
-```
-
-Local branch review still requires an LLM API key (or a configured compatible endpoint), but does not require `GITHUB_TOKEN`. It compares the merge base with the checked-out `HEAD`; staged, unstaged, and untracked working-tree changes are not included.
 
 ---
 
