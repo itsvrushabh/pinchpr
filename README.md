@@ -18,6 +18,7 @@ The project is structured as a modular Cargo workspace:
 * [`crates/pinch-cli`](crates/pinch-cli): User-facing binary CLI (`pinch-pr`).
 
 For full architectural details, see [docs/plan.md](docs/plan.md).
+For branch naming, pull requests, and local development checks, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -92,6 +93,19 @@ cargo run --bin pinch-pr -- review \
   --format json \
   --dry-run
 ```
+
+### 5. Review a Local Branch
+
+Review committed changes on the checked-out branch relative to a base branch or commit. This command prints a report and does not publish to GitHub or modify the repository:
+
+```bash
+cargo run --bin pinch-pr -- review-local \
+  --repo-path . \
+  --base main \
+  --format markdown
+```
+
+Local branch review still requires an LLM API key (or a configured compatible endpoint), but does not require `GITHUB_TOKEN`. It compares the merge base with the checked-out `HEAD`; staged, unstaged, and untracked working-tree changes are not included.
 
 ---
 

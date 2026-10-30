@@ -3,19 +3,10 @@ use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GitHubSettings {
     pub token: Option<String>,
     pub api_url: Option<String>,
-}
-
-impl Default for GitHubSettings {
-    fn default() -> Self {
-        Self {
-            token: None,
-            api_url: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,17 +75,30 @@ impl Settings {
 
         // 1. Base defaults
         let default_settings = Settings::default();
-        builder = builder.set_default("github.token", default_settings.github.token)?
+        builder = builder
+            .set_default("github.token", default_settings.github.token)?
             .set_default("github.api_url", default_settings.github.api_url)?
             .set_default("llm.model", default_settings.llm.model)?
             .set_default("llm.api_key", default_settings.llm.api_key)?
             .set_default("llm.base_url", default_settings.llm.base_url)?
             .set_default("llm.max_tokens", default_settings.llm.max_tokens as i64)?
             .set_default("llm.temperature", default_settings.llm.temperature as f64)?
-            .set_default("review.max_inline_comments", default_settings.review.max_inline_comments as i64)?
-            .set_default("review.enable_inline_comments", default_settings.review.enable_inline_comments)?
-            .set_default("review.token_budget", default_settings.review.token_budget as i64)?
-            .set_default("review.ignore_patterns", default_settings.review.ignore_patterns)?;
+            .set_default(
+                "review.max_inline_comments",
+                default_settings.review.max_inline_comments as i64,
+            )?
+            .set_default(
+                "review.enable_inline_comments",
+                default_settings.review.enable_inline_comments,
+            )?
+            .set_default(
+                "review.token_budget",
+                default_settings.review.token_budget as i64,
+            )?
+            .set_default(
+                "review.ignore_patterns",
+                default_settings.review.ignore_patterns,
+            )?;
 
         // 2. Check local or global config file
         if Path::new("pinch-pr.toml").exists() {
@@ -120,7 +124,9 @@ impl Settings {
             builder = builder.set_override("llm.base_url", openai_base)?;
         }
 
-        let cfg = builder.build().map_err(|e| ConfigError::Build(e.to_string()))?;
+        let cfg = builder
+            .build()
+            .map_err(|e| ConfigError::Build(e.to_string()))?;
         cfg.try_deserialize::<Settings>()
             .map_err(|e| ConfigError::Build(e.to_string()))
     }

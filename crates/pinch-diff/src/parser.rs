@@ -49,7 +49,10 @@ pub fn parse_git_diff(raw_diff: &str) -> Result<Vec<DiffFile>, DiffError> {
                 file.status = FileStatus::Deleted;
                 continue;
             }
-            if line.starts_with("similarity index") || line.starts_with("rename from") || line.starts_with("rename to") {
+            if line.starts_with("similarity index")
+                || line.starts_with("rename from")
+                || line.starts_with("rename to")
+            {
                 file.status = FileStatus::Renamed;
                 continue;
             }
@@ -111,26 +114,28 @@ pub fn parse_git_diff(raw_diff: &str) -> Result<Vec<DiffFile>, DiffError> {
 
         // Hunk body lines
         if let Some(hunk) = &mut current_hunk {
-            if line.starts_with('+') && !line.starts_with("+++") {
+            if let Some(content) = line.strip_prefix('+').filter(|_| !line.starts_with("+++")) {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Add,
-                    content: line[1..].to_string(),
+                    content: content.to_string(),
                     old_lineno: None,
                     new_lineno: Some(current_new_line),
                 });
                 current_new_line += 1;
-            } else if line.starts_with('-') && !line.starts_with("---") {
+            } else if let Some(content) =
+                line.strip_prefix('-').filter(|_| !line.starts_with("---"))
+            {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Delete,
-                    content: line[1..].to_string(),
+                    content: content.to_string(),
                     old_lineno: Some(current_old_line),
                     new_lineno: None,
                 });
                 current_old_line += 1;
-            } else if line.starts_with(' ') {
+            } else if let Some(content) = line.strip_prefix(' ') {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Context,
-                    content: line[1..].to_string(),
+                    content: content.to_string(),
                     old_lineno: Some(current_old_line),
                     new_lineno: Some(current_new_line),
                 });

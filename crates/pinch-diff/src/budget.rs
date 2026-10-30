@@ -22,7 +22,7 @@ impl TokenBudgetManager {
             bpe.encode_with_special_tokens(text).len()
         } else {
             // Standard fallback heuristic: ~4 characters per token
-            (text.len() + 3) / 4
+            text.len().div_ceil(4)
         }
     }
 
@@ -35,9 +35,17 @@ impl TokenBudgetManager {
         let mut prioritized: Vec<&DiffFile> = files.iter().collect();
         prioritized.sort_by_key(|f| {
             let path = f.path();
-            if path.ends_with(".rs") || path.ends_with(".py") || path.ends_with(".ts") || path.ends_with(".go") {
+            if path.ends_with(".rs")
+                || path.ends_with(".py")
+                || path.ends_with(".ts")
+                || path.ends_with(".go")
+            {
                 0
-            } else if path.ends_with(".toml") || path.ends_with(".json") || path.ends_with(".yaml") || path.ends_with(".yml") {
+            } else if path.ends_with(".toml")
+                || path.ends_with(".json")
+                || path.ends_with(".yaml")
+                || path.ends_with(".yml")
+            {
                 1
             } else if path.ends_with(".md") || path.ends_with(".txt") {
                 2
@@ -70,8 +78,11 @@ impl TokenBudgetManager {
                 }
 
                 let hunk_tokens = self.count_tokens(&hunk_str);
-                if current_tokens + self.count_tokens(&file_content) + hunk_tokens > self.max_budget {
-                    file_content.push_str("[Remaining hunks in this file omitted: exceeded token budget]\n");
+                if current_tokens + self.count_tokens(&file_content) + hunk_tokens > self.max_budget
+                {
+                    file_content.push_str(
+                        "[Remaining hunks in this file omitted: exceeded token budget]\n",
+                    );
                     file_omitted = true;
                     break;
                 } else {

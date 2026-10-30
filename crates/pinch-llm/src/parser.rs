@@ -3,9 +3,8 @@ use regex::Regex;
 use serde::de::DeserializeOwned;
 use std::sync::LazyLock;
 
-static JSON_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?s)```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```").unwrap()
-});
+static JSON_BLOCK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```").unwrap());
 
 /// Extract and deserialize a JSON object or array from LLM response text
 pub fn extract_and_parse_json<T: DeserializeOwned>(raw: &str) -> Result<T, LlmError> {

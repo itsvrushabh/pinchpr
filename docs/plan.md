@@ -2,7 +2,7 @@
 
 > **Project:** `pinch-pr` (pr-agent-rs)  
 > **Target:** High-performance, asynchronous Rust port of [The-PR-Agent/pr-agent](https://github.com/The-PR-Agent/pr-agent)  
-> **Status:** Planning & Architecture Complete (Ready for Implementation)
+> **Status:** Core workspace implemented; CI, contributor, local-review, and draft-release workflows added.
 
 ---
 
@@ -216,7 +216,7 @@ graph TD
 
 ## 6. Phased Execution Roadmap
 
-*Note: Execution will begin only upon explicit user command.*
+*This roadmap records the original implementation sequence.*
 
 1. **Phase 1: Workspace & Core Crates (`pinch-core`)**
    - Initialize root `Cargo.toml` workspace.
@@ -249,3 +249,60 @@ graph TD
    - Implement `clap` CLI with `--dry-run`, `--repo`, `--pr`, and `--model`.
    - Setup `tracing_subscriber` logging.
    - End-to-end dry-run verification against public GitHub pull requests.
+
+## 7. Git Workflow Plan
+
+This roadmap covers four related workflows: repository CI, contributor collaboration, tagged releases, and reviewing local Git changes. The first three improve how the project is developed and shipped; local review is a user-facing product capability and should reuse the existing review pipeline without pretending a local repository is a GitHub pull request.
+
+### 7.1 Continuous Integration
+
+Add a GitHub Actions workflow at `.github/workflows/ci.yml`.
+
+* **Triggers:** Pull requests targeting `master` and pushes to `master`.
+* **Runner and toolchain:** Ubuntu with the stable Rust toolchain, plus the official `rustfmt` and `clippy` components. Pin the toolchain action to a maintained major version.
+* **Checks:** Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, and `cargo build --workspace --locked`.
+* **Efficiency and permissions:** Cache Cargo downloads/build artifacts; cancel superseded runs for the same branch or pull request; grant read-only repository permissions. CI must not need GitHub or LLM credentials, and tests must not make live service calls.
+* **Acceptance:** A pull request cannot be considered merge-ready until all checks pass. Confirm that formatting, lint, test, and build failures each fail the workflow.
+
+### 7.2 Contributor Git Process
+
+Document a lightweight branch-and-pull-request convention in the README or a focused contributing guide.
+
+1. Start from an up-to-date `master`; use short-lived branches named by intent, such as `feat/local-review`, `fix/diff-parser`, or `docs/contributing`.
+2. Keep commits focused and explain the motivation in their messages. Do not require a specific commit-message standard until maintainers choose one.
+3. Open a pull request against `master` with a summary, linked issue when applicable, test commands/results, and any user-visible or breaking changes.
+4. Require the CI checks from section 7.1 before merge. Prefer squash merging to keep the mainline history readable; protect `master` with required checks and restrict force pushes/deletion where repository settings permit.
+5. Keep tokens, provider credentials, and generated build output out of commits.
+
+Add a pull request template under `.github/` to collect the summary, validation, and risk information. Configure branch protection as a repository setting; a workflow file alone cannot enforce it.
+
+### 7.3 Tagged Release Workflow
+
+Start with GitHub Releases for distributing the CLI. Keep publication to crates.io out of the initial automation until workspace crate metadata and inter-crate version/dependency requirements are explicitly validated.
+
+1. On a release PR, update the workspace version consistently, add release notes, and verify CI.
+2. After merge, create and push a `vX.Y.Z` tag corresponding to the workspace version.
+3. Add `.github/workflows/release.yml`, triggered only by version tags. It should check out the tagged source, run locked tests, and build optimized CLI binaries for the initially supported Linux, macOS, and Windows targets.
+4. Package each binary with a short usage/installation note, generate SHA-256 checksums, and upload the archives and checksums to a draft GitHub Release.
+5. Require a maintainer to review and publish the draft. Do not publish from arbitrary branch pushes or expose long-lived credentials; use the workflow-provided token with the minimum permissions required.
+
+**Acceptance:** A test tag produces one draft release with the expected target artifacts and verifiable checksums; a non-version tag or ordinary push does not publish artifacts.
+
+### 7.4 Local Git Review Feature
+
+Add local branch review as a separate CLI input path, sharing diff parsing, filtering, token budgeting, LLM analysis, and report rendering with the existing GitHub PR review path.
+
+* **MVP command:** `pinch-pr review-local --repo-path <path> --base <ref>`. Compare the merge-base of `<base>` and the checked-out `HEAD` with `HEAD`, so the report covers the branch's committed changes relative to its base. Resolve refs and paths within the selected repository, and report Git errors clearly.
+* **Local data source:** Extract a shared analysis input boundary rather than implementing a fake `GitProvider` whose publication methods silently do nothing. Supply local branch/ref metadata and a unified diff to the shared review pipeline. Keep local reviews report-only; do not make GitHub mutations.
+* **Git invocation:** Prefer the installed Git executable for the first implementation, invoked with argument arrays (never through a shell). Validate repository paths/refs, handle missing Git, invalid refs, empty diffs, renames, and binary files explicitly, and avoid changing the user's index, working tree, or repository state.
+* **Output and secrets:** Reuse Markdown/JSON output formats. Local review still requires configured LLM access, but must not require a GitHub token.
+* **Tests:** Cover clean/no-change branches, divergent base refs, renames, binary and ignored files, invalid paths/refs, missing Git, and proof that review does not modify repository state. Keep Git and LLM integration tests isolated from external services.
+* **Follow-up scope:** Consider staged, unstaged, and untracked working-tree changes only after the branch-review MVP has stable diff and safety semantics; define how untracked files enter the diff before implementing that mode.
+
+### 7.5 Delivery Order
+
+1. **Complete:** Add CI and make its checks pass on the current workspace.
+2. **Complete:** Add the contributor guide and pull request template. Maintainers still need to configure branch protection and merge settings.
+3. **Complete:** Implement local branch review and its isolated tests, then document the CLI command.
+4. **Implemented, pending first tagged run:** Add draft binary releases for Linux, macOS, and Windows.
+5. **Deferred:** Revisit crates.io publishing as a separate decision after validating package metadata and dependency versioning.

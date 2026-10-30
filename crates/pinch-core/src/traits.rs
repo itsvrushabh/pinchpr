@@ -15,7 +15,11 @@ pub trait GitProvider: Send + Sync {
     async fn publish_comment(&self, pr_number: u64, body: &str) -> Result<(), ProviderError>;
 
     /// Publish a structured pull request review with inline comments on the head commit
-    async fn publish_review(&self, pr_number: u64, review: &ReviewResult) -> Result<(), ProviderError>;
+    async fn publish_review(
+        &self,
+        pr_number: u64,
+        review: &ReviewResult,
+    ) -> Result<(), ProviderError>;
 }
 
 /// Abstraction over LLM completions and structured outputs
